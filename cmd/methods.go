@@ -97,7 +97,7 @@ func (c *inMemoryCache[K, V]) realloc() {
 
 	mapPtr := (*Map)(mapPointer)
 	tableCount := mapPtr.dirLen
-	elemCount := mapPtr.used // or len(c.cache)
+	elemCount := mapPtr.used // or just len(c.cache)
 	if int(math.Log2(float64(tableCount*elemsPerTable/int(elemCount)))) > 1 {
 		mapCopy := make(map[K]V, elemCount)
 		maps.Copy(mapCopy, c.cache)

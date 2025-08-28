@@ -16,7 +16,7 @@ type Option func(options *options) error
 func WithStep(step time.Duration) Option {
 	return func(options *options) error {
 		if step < 0 {
-			return errors.New("step must be positive")
+			return errors.New("step time must be positive")
 		}
 		options.step = step
 		return nil
