@@ -5,7 +5,7 @@ import (
 	"maps"
 	"math"
 	"reflect"
-	"sync/atomic"
+	"sync"
 	"time"
 	"unsafe"
 )
@@ -31,16 +31,20 @@ func (c *inMemoryCache[K, V]) Add(key K, value V, ttl time.Duration) error {
 	}
 	c.queue[t] = append(keys, key)
 	c.addTime(t)
-	c.resetTicker()
+	//c.resetTicker()
 
 	return nil
 }
 
 func (c *inMemoryCache[K, V]) Get(key K) (V, bool) {
 	c.mu.RLock()
-	value, ok := c.cache[key]
+	v, ok := c.cache[key]
 	c.mu.RUnlock()
-	return value.value, ok
+	if time.Now().After(v.time) {
+		var zero V
+		return zero, false
+	}
+	return v.value, ok
 }
 
 func (c *inMemoryCache[K, V]) Delete(keys ...K) {
@@ -65,12 +69,10 @@ func (c *inMemoryCache[K, V]) StartGC() {
 	}
 	go func() {
 		t := time.NewTicker(c.gcInterval)
-		cond := atomic.Int32{}
-		(&cond).Store(1)
 		for {
 			select {
 			case <-t.C:
-				switch c.isGC == cond {
+				switch c.isGC.Load() == 1 {
 				case true:
 					c.realloc()
 				case false:
@@ -89,7 +91,9 @@ func (c *inMemoryCache[K, V]) StartGC() {
 	}
 */
 func (c *inMemoryCache[K, V]) Close() {
-	close(c.closeChan)
+	a := new(sync.Once)
+	a.Do(func() { close(c.closeChan) })
+
 }
 
 func (c *inMemoryCache[K, V]) realloc() {
@@ -139,7 +143,9 @@ func (c *inMemoryCache[K, V]) clean() {
 				for _, key := range keys {
 					delete(c.cache, key)
 				}
-				c.times = c.times[1:]
+				if len(c.times) != 0 {
+					c.times = c.times[1:]
+				}
 				c.resetTicker()
 				c.mu.Unlock()
 			}
@@ -164,6 +170,7 @@ func (c *inMemoryCache[K, V]) deleteKeyFromQueue(key K) {
 	}
 }
 
+// not concurrent-safe
 func (c *inMemoryCache[K, V]) addTime(t time.Time) {
 	index, exists := c.findIndex(t)
 	if exists {
@@ -171,6 +178,8 @@ func (c *inMemoryCache[K, V]) addTime(t time.Time) {
 	}
 	if len(c.times) == cap(c.times) {
 		c.times = append(c.times, time.Time{})
+	} else {
+		c.times = c.times[:len(c.times)+1]
 	}
 	copy(c.times[index+1:], c.times[index:])
 	c.times[index] = t
@@ -179,7 +188,12 @@ func (c *inMemoryCache[K, V]) addTime(t time.Time) {
 	}
 }
 
+// not concurrent-safe
 func (c *inMemoryCache[K, V]) resetTicker() {
+	if len(c.times) == 0 {
+		c.ticker.Reset(time.Hour)
+		return
+	}
 	c.ticker.Reset(c.times[0].Sub(time.Now().Truncate(c.step)))
 }
 
@@ -203,7 +217,7 @@ func (c *inMemoryCache[K, V]) findIndex(t time.Time) (index int, exists bool) {
 }
 
 // Test block
-
+/*
 func findIndex(ts []time.Time, t time.Time) (index int, exists bool) {
 	l := len(ts)
 	i, j := 0, l
@@ -233,3 +247,4 @@ func addTime(ts []time.Time, t time.Time) []time.Time {
 	ts[index] = t
 	return ts
 }
+*/

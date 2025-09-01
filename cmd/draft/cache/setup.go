@@ -90,7 +90,7 @@ func New[K comparable, V any](opts ...Option) (*inMemoryCache[K, V], error) {
 		queueSize:  options.queueSize,
 		gcInterval: options.gcInterval,
 		closeChan:  make(chan struct{}),
-		times:      make([]time.Time, 10),
+		times:      make([]time.Time, 0, 10),
 		ticker:     time.NewTicker(time.Hour),
 	}
 	c.clean()
