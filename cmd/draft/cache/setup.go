@@ -21,9 +21,8 @@ type inMemoryCache[K comparable, V any] struct {
 	isGC       atomic.Int32      // it's used to start goroutine that reallocates the memory
 	gcInterval time.Duration     // interval to check whether memory needs to be reallocated
 	closeChan  chan struct{}
-
-	times  []time.Time
-	ticker *time.Ticker
+	times      []time.Time
+	ticker     *time.Ticker
 }
 
 type options struct {

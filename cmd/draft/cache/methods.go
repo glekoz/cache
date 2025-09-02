@@ -164,10 +164,24 @@ func (c *inMemoryCache[K, V]) deleteKeyFromQueue(key K) {
 		if k == key {
 			keySlice[i] = keySlice[len(keySlice)-1]
 			c.queue[v.time] = keySlice[:len(keySlice)-1]
+			c.deleteTimeFromTimes(v.time)
+			if i == 0 {
+				c.resetTicker()
+			}
 			//keySlice=append(keySlice[:i], keySlice[i+1:]...)
 			break
 		}
 	}
+}
+
+// not concurrent-safe
+func (c *inMemoryCache[K, V]) deleteTimeFromTimes(t time.Time) {
+	index, exists := c.findIndex(t)
+	if !exists {
+		return
+	}
+	c.times[index] = c.times[len(c.times)-1]
+	c.times = c.times[:len(c.times)-1]
 }
 
 // not concurrent-safe
