@@ -13,6 +13,14 @@ import (
 const elemsPerTable = 896 // it's used for memory reallocating
 
 func (c *inMemoryCache[K, V]) Add(key K, value V, ttl time.Duration) error {
+	// switch any(key).(type) {
+	// case int:
+	// default:
+	//	var k K
+	// 	if key == k {
+	// 		return errors.New("key must be non-zero value")
+	// 	}
+	// }
 	if ttl < c.step {
 		return errors.New("ttl must be more than cache check step")
 	}
@@ -22,7 +30,7 @@ func (c *inMemoryCache[K, V]) Add(key K, value V, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.deleteKeyFromQueue(key)
+	c.deleteKeyFromQueue(key) // too heavy for active usage
 
 	c.cache[key] = Value[V]{time: t, value: value}
 	keys, ok := c.queue[t]
@@ -31,7 +39,6 @@ func (c *inMemoryCache[K, V]) Add(key K, value V, ttl time.Duration) error {
 	}
 	c.queue[t] = append(keys, key)
 	c.addTime(t)
-	//c.resetTicker()
 
 	return nil
 }
@@ -51,16 +58,11 @@ func (c *inMemoryCache[K, V]) Delete(keys ...K) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, key := range keys {
-		/*
-			the code is correct, but it takes too much CPU time
-			to find and delete something that will eventually be deleted
-				c.deleteKeyFromQueue(key)
-		*/
+		// the code is correct, but it takes too much CPU time
+		// to find and delete something that will eventually be deleted
+		c.deleteKeyFromQueue(key)
 		delete(c.cache, key)
 	}
-
-	// добавить срезы
-
 }
 
 func (c *inMemoryCache[K, V]) StartGC() {
@@ -91,7 +93,7 @@ func (c *inMemoryCache[K, V]) StartGC() {
 	}
 */
 func (c *inMemoryCache[K, V]) Close() {
-	a := new(sync.Once)
+	a := new(sync.Once) // move to struct's fields
 	a.Do(func() { close(c.closeChan) })
 
 }
@@ -133,13 +135,14 @@ func (c *inMemoryCache[K, V]) clean() {
 			case <-c.closeChan:
 				return
 			case <-c.ticker.C:
-				c.mu.RLock()
-				keys, ok := c.queue[time.Now().Truncate(c.step)]
-				c.mu.RUnlock()
-				if !ok {
-					continue // or break
-				}
 				c.mu.Lock()
+				t := time.Now().Truncate(c.step)
+				keys, ok := c.queue[t]
+				if !ok {
+					c.mu.Unlock()
+					break // or continue
+				}
+				delete(c.queue, t)
 				for _, key := range keys {
 					delete(c.cache, key)
 				}
@@ -154,6 +157,7 @@ func (c *inMemoryCache[K, V]) clean() {
 }
 
 // not concurrent-safe
+// I should move this heavy-lifting method to my GC
 func (c *inMemoryCache[K, V]) deleteKeyFromQueue(key K) {
 	v, ok := c.cache[key]
 	if !ok {
@@ -164,9 +168,9 @@ func (c *inMemoryCache[K, V]) deleteKeyFromQueue(key K) {
 		if k == key {
 			keySlice[i] = keySlice[len(keySlice)-1]
 			c.queue[v.time] = keySlice[:len(keySlice)-1]
-			c.deleteTimeFromTimes(v.time)
-			if i == 0 {
-				c.resetTicker()
+			if len(c.queue[v.time]) == 0 {
+				delete(c.queue, v.time)
+				c.deleteTimeFromTimes(v.time)
 			}
 			//keySlice=append(keySlice[:i], keySlice[i+1:]...)
 			break
@@ -182,6 +186,9 @@ func (c *inMemoryCache[K, V]) deleteTimeFromTimes(t time.Time) {
 	}
 	c.times[index] = c.times[len(c.times)-1]
 	c.times = c.times[:len(c.times)-1]
+	if index == 0 {
+		c.resetTicker()
+	}
 }
 
 // not concurrent-safe
