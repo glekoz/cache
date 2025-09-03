@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// optionally add new field - use bit (boolean) - to implement clock algorithm
 type Value[V any] struct {
 	time  time.Time
 	value V
