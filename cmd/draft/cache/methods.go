@@ -33,11 +33,11 @@ func (c *inMemoryCache[K, V]) Add(key K, value V, ttl time.Duration) error {
 	c.deleteKeyFromQueue(key) // too heavy for active usage
 
 	c.cache[key] = Value[V]{time: t, value: value}
-	keys, ok := c.queue[t]
-	if !ok {
+
+	if _, ok := c.queue[t]; !ok {
 		c.queue[t] = make([]K, 0, c.queueSize)
 	}
-	c.queue[t] = append(keys, key)
+	c.queue[t] = append(c.queue[t], key)
 	c.addTime(t)
 
 	return nil
