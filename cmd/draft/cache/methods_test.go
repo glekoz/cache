@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ type TestData struct {
 	expectedCache Value[string]
 	expectedQueue []int
 	expectedTimes []time.Time
-	expectedErr   error
+	expectedErr   string
 }
 
 type CacheSuite struct {
@@ -46,14 +47,11 @@ func (s *CacheSuite) SetupSuite() {
 }
 
 // func (s *CacheSuite) BeforeTest(suiteName, testName string) {
-// if suiteName == "CacheSuite" && (testName == "TestGet" || testName == "TestDelete") {
-// 	data := []Data{
-// 		{
-// 			name: "Test",
-// 		},
+// 	if strings.Contains(testName, "TestGet") {
+// 		for i := range 10{
+// 			s.cache.Add(i, "v", 5*time.Second * time.Duration(i+1))
+// 		}
 // 	}
-// 	s.cache.Add(1, "first", time.Second)
-// }
 // }
 
 func (s *CacheSuite) TearDownTest() {
@@ -290,6 +288,109 @@ func (s *CacheSuite) TestAdd_DifferentKey_AnyValue_DifferentTTL() {
 		})
 	}
 }
+
+func (s *CacheSuite) TestAdd_Parallel() {
+	var wg sync.WaitGroup
+	var n int
+
+	wg.Add(n)
+	for j := range n {
+		go func() {
+			defer wg.Done()
+			for i := range n {
+				s.cache.Add((j*10 + i), "v", time.Second*5+time.Second*time.Duration(j*10+i))
+			}
+		}()
+	}
+	wg.Wait()
+	s.Assert().Equal(n*n, len(s.cache.cache))
+	s.Assert().Equal(n*n, len(s.cache.queue))
+	s.Assert().Equal(n*n, len(s.cache.times))
+}
+
+func (s *CacheSuite) TestAdd_Err() {
+	for i := range 5 {
+		ttl := 10 * time.Second * time.Duration(-i)
+
+		s.td = append(s.td, TestData{
+			name:  fmt.Sprintf("TTL #%d", i),
+			key:   i,
+			value: "v",
+			ttl:   ttl,
+
+			expectedCache: Value[string]{},
+			expectedQueue: []int{},
+			expectedTimes: []time.Time{},
+			expectedErr:   "ttl must be more than cache check step",
+		})
+	}
+	for _, test := range s.td {
+		s.T().Run(test.name, func(t *testing.T) {
+			err := s.cache.Add(test.key, test.value, test.ttl)
+			s.Assert().Equal(test.expectedErr, err.Error())
+			s.Assert().Equal(0, len(s.cache.cache))
+			s.Assert().Equal(0, len(s.cache.queue))
+			s.Assert().Equal(0, len(s.cache.times))
+		})
+	}
+}
+
+func (s *CacheSuite) TestGet_Happy() {
+	if testing.Short() {
+		s.T().Skip("Skipping long-running test in short mode")
+	}
+	n := 10
+	expected := make([]string, 10)
+	for i := range n {
+		expected[i] = fmt.Sprintf("Value #%d", i)
+		s.cache.Add(i, expected[i], time.Second*time.Duration(i+1))
+	}
+	for i := range n {
+		s.T().Run(fmt.Sprintf("Get Test #%d", i), func(t *testing.T) {
+			value, ok := s.cache.Get(i)
+			s.Require().True(ok)
+			s.Assert().Equal(expected[i], value)
+		})
+	}
+	time.Sleep(11 * time.Second)
+	s.Assert().Equal(0, len(s.cache.cache))
+	s.Assert().Equal(0, len(s.cache.queue))
+	s.Assert().Equal(0, len(s.cache.times))
+	select {
+	case <-s.cache.ticker.C:
+		s.FailNow("how come ticker sent a signal?")
+	case <-time.NewTicker(5 * time.Second).C:
+	}
+}
+
+func (s *CacheSuite) TestGet_Err() {
+	n := 10
+	expected := make([]string, n)
+	for i := range n {
+		expected[i] = fmt.Sprintf("Value #%d", i)
+		s.cache.Add(i, expected[i], time.Second*time.Duration(i+1))
+	}
+	for i := range n {
+		_, ok := s.cache.Get(n + i)
+		s.Assert().False(ok)
+	}
+}
+
+func (s *CacheSuite) TestDelete() {
+	n := 10
+	expected := make([]string, 10)
+	for i := range n {
+		expected[i] = fmt.Sprintf("Value #%d", i)
+		s.cache.Add(i, expected[i], time.Second*time.Duration(i+1))
+	}
+	for i := range n {
+		s.cache.Delete(i)
+		s.Assert().Equal(n-i-1, len(s.cache.cache), "s.cache.cache")
+		s.Assert().Equal(n-i-1, len(s.cache.queue), "s.cache.queue")
+		s.Assert().Equal(n-i-1, len(s.cache.times), "s.cache.times")
+	}
+}
+
 func TestCacheSuite(t *testing.T) {
 	suite.Run(t, new(CacheSuite))
 }
