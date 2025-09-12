@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// optionally add new field - use bit (boolean) - to implement clock algorithm
 type Value[V any] struct {
 	time  time.Time
 	value V
@@ -19,10 +18,6 @@ type inMemoryCache[K comparable, V any] struct {
 	queue     map[time.Time][]K // map that's used for storing keys and their expiration time
 	step      time.Duration     // minimal time clock to check whether keys are expired
 	queueSize int               // size of []K - depends on use case
-	//isGC       atomic.Int32      // it's used to start goroutine that reallocates the memory
-	//gcInterval time.Duration     // interval to check whether memory needs to be reallocated
-	closeChan chan struct{}
-	closed    atomic.Bool
 	times     []time.Time
 	ticker    *time.Ticker
 }
@@ -30,7 +25,6 @@ type inMemoryCache[K comparable, V any] struct {
 type options struct {
 	step       time.Duration
 	queueSize  int
-	gcInterval time.Duration
 }
 
 type Option func(options *options) error
@@ -55,15 +49,6 @@ func WithQueueSize(size int) Option {
 	}
 }
 
-// func WithGCInterval(interval time.Duration) Option {
-// 	return func(options *options) error {
-// 		if interval < 0 {
-// 			return errors.New("GC interval must be positive")
-// 		}
-// 		options.gcInterval = interval
-// 		return nil
-// 	}
-// }
 
 func New[K comparable, V any](opts ...Option) (*inMemoryCache[K, V], error) {
 	var options options
@@ -80,17 +65,12 @@ func New[K comparable, V any](opts ...Option) (*inMemoryCache[K, V], error) {
 	if options.queueSize == 0 {
 		options.queueSize = 5
 	}
-	if options.gcInterval == 0 {
-		options.gcInterval = time.Minute
-	}
 
 	c := &inMemoryCache[K, V]{
 		cache:     make(map[K]Value[V]),
 		queue:     make(map[time.Time][]K),
 		step:      options.step,
 		queueSize: options.queueSize,
-		//gcInterval: options.gcInterval,
-		closeChan: make(chan struct{}),
 		times:     make([]time.Time, 0, 10),
 		ticker:    time.NewTicker(time.Hour),
 	}
