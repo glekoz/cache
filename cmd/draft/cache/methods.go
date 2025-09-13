@@ -7,17 +7,6 @@ import (
 )
 
 func (c *inMemoryCache[K, V]) Add(key K, value V, ttl time.Duration) error {
-	// switch any(key).(type) {
-	// case int:
-	// default:
-	//	var k K
-	// 	if key == k {
-	// 		return errors.New("key must be non-zero value")
-	// 	}
-	// }
-	if err := c.check(); err != nil {
-		return err
-	}
 	if ttl < c.step {
 		return errors.New("ttl must be more than cache check step")
 	}
@@ -27,7 +16,7 @@ func (c *inMemoryCache[K, V]) Add(key K, value V, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.deleteKeyFromQueue(key) // too heavy for active usage - need to order keys
+	c.deleteKeyFromQueue(key) 
 
 	c.cache[key] = Value[V]{time: t, value: value}
 
@@ -41,24 +30,13 @@ func (c *inMemoryCache[K, V]) Add(key K, value V, ttl time.Duration) error {
 }
 
 func (c *inMemoryCache[K, V]) Get(key K) (V, bool) {
-	if err := c.check(); err != nil {
-		var zero V
-		return zero, false
-	}
 	c.mu.RLock()
 	v, ok := c.cache[key]
 	c.mu.RUnlock()
-	// if time.Now().After(v.time) {
-	// 	var zero V
-	// 	return zero, false
-	// }
 	return v.value, ok
 }
 
 func (c *inMemoryCache[K, V]) Delete(keys ...K) {
-	if err := c.check(); err != nil {
-		return
-	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, key := range keys {
@@ -68,23 +46,6 @@ func (c *inMemoryCache[K, V]) Delete(keys ...K) {
 		c.deleteKeyFromQueue(key)
 		delete(c.cache, key)
 	}
-}
-
-func (c *inMemoryCache[K, V]) Close() error {
-	// a := new(sync.Once) // move to struct's fields
-	// a.Do(func() { close(c.closeChan) })
-	if !c.closed.CompareAndSwap(false, true) {
-		return errors.New("cache has been already deactivated")
-	}
-	c.closed.Store(true)
-	return nil
-}
-
-func (c *inMemoryCache[K, V]) check() error {
-	if !c.closed.CompareAndSwap(false, false) {
-		return errors.New("cache has been already deactivated")
-	}
-	return nil
 }
 
 func (c *inMemoryCache[K, V]) clean() {
@@ -131,7 +92,6 @@ func (c *inMemoryCache[K, V]) deleteKeyFromQueue(key K) {
 				delete(c.queue, v.time)
 				c.deleteTimeFromTimes(v.time)
 			}
-			//keySlice=append(keySlice[:i], keySlice[i+1:]...)
 			break
 		}
 	}
@@ -195,63 +155,3 @@ func (c *inMemoryCache[K, V]) findIndex(t time.Time) (index int, exists bool) {
 	return i, false
 }
 
-// I'm not sure whether I need following code
-/*
-const elemsPerTable = 896 // it's used for memory reallocating
-
-func (c *inMemoryCache[K, V]) StartGC() {
-	if !c.isGC.CompareAndSwap(0, 1) {
-		return
-	}
-	go func() {
-		t := time.NewTicker(c.gcInterval)
-		for {
-			select {
-			case <-t.C:
-				switch c.isGC.Load() == 1 {
-				case true:
-					c.realloc()
-				case false:
-					return
-				}
-			case <-c.closeChan:
-				return
-			}
-		}
-	}()
-}
-
-// func (c *inMemoryCache[K, V]) StopGC() {
-// 	c.isGC.CompareAndSwap(1, 0)
-// }
-
-func (c *inMemoryCache[K, V]) realloc() {
-	mapValue := reflect.ValueOf(c.cache)
-	mapPointer := unsafe.Pointer(mapValue.Pointer())
-	type Map struct {
-		used              uint64
-		seed              uintptr
-		dirPtr            unsafe.Pointer
-		dirLen            int
-		globalDepth       uint8
-		globalShift       uint8
-		writing           uint8
-		tombstonePossible bool
-		clearSeq          uint64
-	}
-
-	mapPtr := (*Map)(mapPointer)
-	tableCount := mapPtr.dirLen
-	elemCount := mapPtr.used // or just len(c.cache)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if int(math.Log2(float64(tableCount*elemsPerTable/int(elemCount)))) > 1 {
-		mapCopy := make(map[K]Value[V], elemCount)
-		maps.Copy(mapCopy, c.cache)
-		c.cache = mapCopy
-	}
-	timesCopy := make([]time.Time, len(c.times), cap(c.times))
-	copy(timesCopy, c.times)
-	c.times = timesCopy
-}
-*/
