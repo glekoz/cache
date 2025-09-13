@@ -1,24 +1,43 @@
 package cache
 
 import (
+	"cmp"
 	"errors"
+	"sync"
 	"time"
 )
 
+type value[V any] struct {
+	time  time.Time //time.Mow() + ttl; min ttl = 1ms
+	value V
+}
+
+type inMemoryCache[K cmp.Ordered, V any] struct {
+	mu           sync.RWMutex      // no comments
+	cache        map[K]value[V]    // map for storing keys and values
+	cacheSize    int               // initial size of cache
+	queue        map[time.Time][]K // map that's used for storing expiration time and corresponding ordered slice of keys
+	queueKeySize int               // initial size of []K in queue
+	times        []time.Time       // ordered slice of all expiration times (it's used to retrieve specific keys)
+	step         time.Duration     // ttl step of 1 ms
+
+}
+
 type options struct {
-	step       time.Duration
-	queueSize  int
-	gcInterval time.Duration
+	cacheSize    int // initial size of cache
+	queueSize    int // initial size of queue
+	timeSize     int // initial size of times
+	queueKeySize int // initial size of []K in queue
 }
 
 type Option func(options *options) error
 
-func WithStep(step time.Duration) Option {
+func WithCacheSize(size int) Option {
 	return func(options *options) error {
-		if step < 0 {
-			return errors.New("step time must be positive")
+		if size < 0 {
+			return errors.New("cache size must be positive")
 		}
-		options.step = step
+		options.queueSize = size
 		return nil
 	}
 }
@@ -33,17 +52,27 @@ func WithQueueSize(size int) Option {
 	}
 }
 
-func WithGCInterval(interval time.Duration) Option {
+func WithTimeSize(size int) Option {
 	return func(options *options) error {
-		if interval < 0 {
-			return errors.New("GC interval must be positive")
+		if size < 0 {
+			return errors.New("times size must be positive")
 		}
-		options.gcInterval = interval
+		options.timeSize = size
 		return nil
 	}
 }
 
-func New[K comparable, V any](opts ...Option) (*inMemoryCache[K, V], error) {
+func WithQueueKeySize(size int) Option {
+	return func(options *options) error {
+		if size < 0 {
+			return errors.New("queue keys size must be positive")
+		}
+		options.queueKeySize = size
+		return nil
+	}
+}
+
+func New[K cmp.Ordered, V any](opts ...Option) (*inMemoryCache[K, V], error) {
 	var options options
 	for _, opt := range opts {
 		err := opt(&options)
@@ -52,24 +81,26 @@ func New[K comparable, V any](opts ...Option) (*inMemoryCache[K, V], error) {
 		}
 	}
 
-	if options.step == 0 {
-		options.step = time.Second
+	if options.cacheSize == 0 {
+		options.cacheSize = 5
 	}
 	if options.queueSize == 0 {
 		options.queueSize = 5
 	}
-	if options.gcInterval == 0 {
-		options.gcInterval = time.Minute
+	if options.timeSize == 0 {
+		options.timeSize = 5
+	}
+	if options.queueKeySize == 0 {
+		options.queueKeySize = 5
 	}
 
 	c := &inMemoryCache[K, V]{
-		cache:      make(map[K]V),
-		queue:      make(map[time.Time][]K),
-		step:       options.step,
-		queueSize:  options.queueSize,
-		gcInterval: options.gcInterval,
+		cache:        make(map[K]value[V], options.cacheSize),
+		queue:        make(map[time.Time][]K, options.queueSize),
+		times:        make([]time.Time, 0, options.timeSize),
+		queueKeySize: options.queueKeySize,
+		step:         time.Millisecond,
 	}
-	c.clean()
 
 	return c, nil
 }
