@@ -31,9 +31,11 @@ func (s *CacheSuite) SetupSuite() {
 }
 
 func (s *CacheSuite) TearDownTest() {
-	clear(s.cache.cache)
-	clear(s.cache.queue)
-	s.cache.times = s.cache.times[:0]
+	c, err := New[int, string]()
+	if err != nil {
+		s.FailNow("SetupSuite New cache failed")
+	}
+	s.cache = c
 }
 
 // ----------------------------------------------------------------
@@ -326,6 +328,21 @@ func (s *CacheSuite) TestDelete() {
 		s.Assert().Equal(n-i-1, len(s.cache.queue), "s.cache.queue")
 		s.Assert().Equal(n-i-1, len(s.cache.times), "s.cache.times")
 	}
+}
+
+func (s *CacheSuite) TestClean() {
+	for i := range 4 {
+		s.cache.Add(i, "v", 1*time.Second)
+	}
+	s.Assert().Equal(4, len(s.cache.cache))
+	s.Assert().Equal(1, len(s.cache.queue))
+	s.Assert().Equal(1, len(s.cache.times))
+	time.Sleep(2 * time.Second)
+	s.cache.Add(4, "v", 1*time.Second)
+	s.Assert().Equal(2, s.cache.cacheSize)
+	s.Assert().Equal(1, len(s.cache.cache))
+	s.Assert().Equal(1, len(s.cache.queue))
+	s.Assert().Equal(1, len(s.cache.times))
 }
 
 // ----------------------------------------------------------------

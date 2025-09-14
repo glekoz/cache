@@ -66,19 +66,24 @@ func (c *inMemoryCache[K, V]) clean() {
 		if time.Now().After(t) {
 			expiredTimes = append(expiredTimes, t)
 		} else {
-			index = i
+			if i == 0 {
+				index = i
+			} else {
+				index = i - 1
+			}
 			break
 		}
 	}
 	for _, t := range expiredTimes {
-		for _, key := range c.queue[t] {
+		temp := make([]K, len(c.queue[t]))
+		copy(temp, c.queue[t]) // slices.Delete in deleteKeyFromQueue leads to changing c.queue[t], so I need to create a full copy to save keys to delete
+		for _, key := range temp {
 			c.deleteKeyFromQueue(key)
 			delete(c.cache, key)
 		}
 	}
 	c.cacheSize = 2 * len(c.cache)
-	newlen := (len(c.times[index:])/896 + 1) * 2
-	temp := make([]time.Time, len(c.times[index:]), newlen)
+	temp := make([]time.Time, len(c.times[index:]), len(c.times[index:])*2)
 	copy(temp, c.times[index:])
 	c.times = temp
 }
@@ -93,8 +98,7 @@ func (c *inMemoryCache[K, V]) deleteKeyFromQueue(key K) {
 	if !exists {
 		return
 	}
-	c.queue[v.time][index] = c.queue[v.time][len(c.queue[v.time])-1]
-	c.queue[v.time] = c.queue[v.time][:len(c.queue[v.time])-1]
+	c.queue[v.time] = slices.Delete(c.queue[v.time], index, index+1)
 	if len(c.queue[v.time]) == 0 {
 		delete(c.queue, v.time)
 		c.deleteTimeFromTimes(v.time)

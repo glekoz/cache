@@ -20,7 +20,6 @@ type inMemoryCache[K cmp.Ordered, V any] struct {
 	queueKeySize int               // initial size of []K in queue
 	times        []time.Time       // ordered slice of all expiration times (it's used to retrieve specific keys)
 	step         time.Duration     // ttl step of 1 ms
-
 }
 
 type options struct {
@@ -98,6 +97,7 @@ func New[K cmp.Ordered, V any](opts ...Option) (*inMemoryCache[K, V], error) {
 		cache:        make(map[K]value[V], options.cacheSize),
 		queue:        make(map[time.Time][]K, options.queueSize),
 		times:        make([]time.Time, 0, options.timeSize),
+		cacheSize:    options.cacheSize,
 		queueKeySize: options.queueKeySize,
 		step:         time.Second,
 	}
