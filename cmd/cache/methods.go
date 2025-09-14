@@ -2,28 +2,29 @@ package cache
 
 import (
 	"cmp"
+	"errors"
 	"slices"
 	"time"
 )
 
 func (c *inMemoryCache[K, V]) Add(key K, val V, ttl time.Duration) error {
 	if ttl < c.step {
-		ttl = c.step
-	} else {
-		ttl = ttl.Truncate(c.step)
+		return errors.New("ttl must be more than cache step")
 	}
+	ttl = ttl.Truncate(c.step)
 	t := time.Now().Truncate(c.step)
 	t = t.Add(ttl)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.deleteKeyFromQueue(key)
 	c.cache[key] = value[V]{time: t, value: val}
+
 	if _, ok := c.queue[t]; !ok {
 		c.queue[t] = make([]K, 0, c.queueKeySize)
 	}
-	//c.queue[t] = append(c.queue[t], key) // addKey
-	c.deleteKeyFromQueue(key)
+
 	c.addKey(key, t)
 	c.addTime(t)
 
@@ -76,7 +77,8 @@ func (c *inMemoryCache[K, V]) clean() {
 		}
 	}
 	c.cacheSize = 2 * len(c.cache)
-	temp := make([]time.Time, len(c.times[index:]), 2*len(c.times[index:]))
+	newlen := (len(c.times[index:])/896 + 1) * 2
+	temp := make([]time.Time, len(c.times[index:]), newlen)
 	copy(temp, c.times[index:])
 	c.times = temp
 }
@@ -101,15 +103,11 @@ func (c *inMemoryCache[K, V]) deleteKeyFromQueue(key K) {
 
 // not concurrent-safe
 func (c *inMemoryCache[K, V]) deleteTimeFromTimes(t time.Time) {
-	//index, exists := c.findIndex(t)
 	index, exists := findIndex(c.times, t, time.Time.Compare)
 	if !exists {
 		return
 	}
 	c.times = slices.Delete(c.times, index, index+1)
-	// if index == 0 {
-	// 	c.resetTicker()
-	// }
 }
 
 // not concurrent-safe
@@ -125,11 +123,9 @@ func (c *inMemoryCache[K, V]) addTime(t time.Time) {
 	}
 	copy(c.times[index+1:], c.times[index:])
 	c.times[index] = t
-	// if index == 0 {
-	// 	c.resetTicker()
-	// }
 }
 
+// not concurrent-safe
 func (c *inMemoryCache[K, V]) addKey(key K, t time.Time) {
 	index, exists := findIndex(c.queue[t], key, cmp.Compare)
 	if exists {
@@ -145,33 +141,6 @@ func (c *inMemoryCache[K, V]) addKey(key K, t time.Time) {
 }
 
 // not concurrent-safe
-// func (c *inMemoryCache[K, V]) resetTicker() {
-// 	if len(c.times) == 0 {
-// 		c.ticker.Reset(time.Hour)
-// 		return
-// 	}
-// 	c.ticker.Reset(c.times[0].Sub(time.Now().Truncate(c.step)))
-// }
-
-// returns index before which you should place new value
-// 3 -> [0, 5, 9]: the function returns 1
-// func (c *inMemoryCache[K, V]) findIndex(t time.Time) (index int, exists bool) {
-// 	l := len(c.times)
-// 	i, j := 0, l
-// 	for i < j {
-// 		mid := (i + j) >> 1
-// 		switch c.times[mid].Compare(t) {
-// 		case -1:
-// 			i = mid + 1
-// 		case 0:
-// 			return mid, true
-// 		case 1:
-// 			j = mid
-// 		}
-// 	}
-// 	return i, false
-// }
-
 func findIndex[S []T, T comparable](slice S, item T, compFunc func(x, y T) int) (index int, exists bool) {
 	l := len(slice)
 	i, j := 0, l
@@ -189,76 +158,3 @@ func findIndex[S []T, T comparable](slice S, item T, compFunc func(x, y T) int) 
 	}
 	return i, false
 }
-
-// func isCmpOrdered(item any) bool {
-// 	if _, ok := item.(int); ok{
-// 		return true
-// 	} else if _, ok := item.(string); ok {
-// 		return true
-// 	}
-// 	// } else if _, ok := item.(float64); ok{ // because float can be asserted to int type
-// 	// 	return true
-// 	// }
-// 	return false
-// }
-
-// I'm not sure whether I need following code
-/*
-const elemsPerTable = 896 // it's used for memory reallocating
-
-func (c *inMemoryCache[K, V]) StartGC() {
-	if !c.isGC.CompareAndSwap(0, 1) {
-		return
-	}
-	go func() {
-		t := time.NewTicker(c.gcInterval)
-		for {
-			select {
-			case <-t.C:
-				switch c.isGC.Load() == 1 {
-				case true:
-					c.realloc()
-				case false:
-					return
-				}
-			case <-c.closeChan:
-				return
-			}
-		}
-	}()
-}
-
-// func (c *inMemoryCache[K, V]) StopGC() {
-// 	c.isGC.CompareAndSwap(1, 0)
-// }
-
-func (c *inMemoryCache[K, V]) realloc() {
-	mapValue := reflect.ValueOf(c.cache)
-	mapPointer := unsafe.Pointer(mapValue.Pointer())
-	type Map struct {
-		used              uint64
-		seed              uintptr
-		dirPtr            unsafe.Pointer
-		dirLen            int
-		globalDepth       uint8
-		globalShift       uint8
-		writing           uint8
-		tombstonePossible bool
-		clearSeq          uint64
-	}
-
-	mapPtr := (*Map)(mapPointer)
-	tableCount := mapPtr.dirLen
-	elemCount := mapPtr.used // or just len(c.cache)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if int(math.Log2(float64(tableCount*elemsPerTable/int(elemCount)))) > 1 {
-		mapCopy := make(map[K]Value[V], elemCount)
-		maps.Copy(mapCopy, c.cache)
-		c.cache = mapCopy
-	}
-	timesCopy := make([]time.Time, len(c.times), cap(c.times))
-	copy(timesCopy, c.times)
-	c.times = timesCopy
-}
-*/

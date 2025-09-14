@@ -8,7 +8,7 @@ import (
 )
 
 type value[V any] struct {
-	time  time.Time //time.Mow() + ttl; min ttl = 1ms
+	time  time.Time //time.Now() + ttl; min ttl = 1s
 	value V
 }
 
@@ -99,7 +99,7 @@ func New[K cmp.Ordered, V any](opts ...Option) (*inMemoryCache[K, V], error) {
 		queue:        make(map[time.Time][]K, options.queueSize),
 		times:        make([]time.Time, 0, options.timeSize),
 		queueKeySize: options.queueKeySize,
-		step:         time.Millisecond,
+		step:         time.Second,
 	}
 
 	return c, nil
