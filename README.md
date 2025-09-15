@@ -19,8 +19,6 @@ A lightweight, in-memory cache for Go with TTL support — simple, fast, and wel
 * [Implementation details](#implementation-details)
 * [Examples](#examples)
 * [Tests & Coverage](#tests--coverage)
-* [Contributing](#contributing)
-* [License](#license)
 
 ---
 
