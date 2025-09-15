@@ -1,8 +1,6 @@
 # cache
 
-[![Coverage](https://img.shields.io/badge/coverage-96.8%25-brightgreen.svg)](https://github.com/glekoz/cache)
-
-A lightweight, in-memory cache for Go with TTL support — simple, fast, and well-tested.
+###A lightweight, in-memory cache for Go with TTL support — simple, fast, and well-tested.
 
 ---
 
@@ -161,6 +159,6 @@ Run the test suite locally:
 go test ./...
 ```
 
-The repository currently reports **96.8%** statement coverage.
+The repository currently reports **96.8%** statement coverage. [![Coverage](https://img.shields.io/badge/coverage-96.8%25-brightgreen.svg)](https://github.com/glekoz/cache)
 
 ---
