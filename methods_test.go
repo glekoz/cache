@@ -178,7 +178,7 @@ func (s *CacheSuite) TestAdd_SameKey_DifferentValue_DifferentTTL() {
 
 func (s *CacheSuite) TestAdd_DifferentKey_AnyValue_SameTTL() {
 	tm := time.Now().Truncate(s.cache.step)
-	n := 5
+	n := 10
 	td := make([]TestData, 0, n)
 	expque := make([]int, 0, n)
 
@@ -207,7 +207,7 @@ func (s *CacheSuite) TestAdd_DifferentKey_AnyValue_SameTTL() {
 
 func (s *CacheSuite) TestAdd_DifferentKey_AnyValue_DifferentTTL() {
 	tm := time.Now().Truncate(s.cache.step)
-	n := 5
+	n := 10
 	td := make([]TestData, 0, n)
 	exptim := make([]time.Time, 0, n)
 
@@ -313,6 +313,9 @@ func (s *CacheSuite) TestGet() {
 	s.Assert().Equal(0, len(s.cache.cache))
 	s.Assert().Equal(0, len(s.cache.queue))
 	s.Assert().Equal(0, len(s.cache.times))
+	value, ok := s.cache.Get(n + 1)
+	s.Require().False(ok)
+	s.Assert().Equal("", value)
 }
 
 func (s *CacheSuite) TestDelete() {
