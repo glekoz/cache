@@ -1,6 +1,6 @@
 # cache
 
-###A lightweight, in-memory cache for Go with TTL support — simple, fast, and well-tested.
+### A lightweight, in-memory cache for Go with TTL support — simple, fast, and well-tested.
 
 ---
 
