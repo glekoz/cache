@@ -36,7 +36,7 @@ func WithCacheSize(size int) Option {
 		if size < 0 {
 			return errors.New("cache size must be positive")
 		}
-		options.queueSize = size
+		options.cacheSize = size
 		return nil
 	}
 }
