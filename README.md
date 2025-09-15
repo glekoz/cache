@@ -160,6 +160,7 @@ go test ./...
 ```
 
 The repository currently reports **96.8%** statement coverage.
+
 [![Coverage](https://img.shields.io/badge/coverage-96.8%25-brightgreen.svg)](https://github.com/glekoz/cache)
 
 ---
