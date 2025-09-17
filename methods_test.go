@@ -15,7 +15,7 @@ import (
 
 type CacheSuite struct {
 	suite.Suite
-	cache *inMemoryCache[int, string]
+	cache *Cache[int, string]
 }
 
 func TestCacheSuite(t *testing.T) {

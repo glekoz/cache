@@ -12,7 +12,7 @@ type value[V any] struct {
 	value V
 }
 
-type inMemoryCache[K cmp.Ordered, V any] struct {
+type Cache[K cmp.Ordered, V any] struct {
 	mu           sync.RWMutex      // no comments
 	cache        map[K]value[V]    // map for storing keys and values
 	cacheSize    int               // initial size of cache
@@ -71,7 +71,7 @@ func WithQueueKeySize(size int) Option {
 	}
 }
 
-func New[K cmp.Ordered, V any](opts ...Option) (*inMemoryCache[K, V], error) {
+func New[K cmp.Ordered, V any](opts ...Option) (*Cache[K, V], error) {
 	var options options
 	for _, opt := range opts {
 		err := opt(&options)
@@ -93,7 +93,7 @@ func New[K cmp.Ordered, V any](opts ...Option) (*inMemoryCache[K, V], error) {
 		options.queueKeySize = 5
 	}
 
-	c := &inMemoryCache[K, V]{
+	c := &Cache[K, V]{
 		cache:        make(map[K]value[V], options.cacheSize),
 		queue:        make(map[time.Time][]K, options.queueSize),
 		times:        make([]time.Time, 0, options.timeSize),

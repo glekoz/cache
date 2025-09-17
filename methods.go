@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (c *inMemoryCache[K, V]) Add(key K, val V, ttl time.Duration) error {
+func (c *Cache[K, V]) Add(key K, val V, ttl time.Duration) error {
 	if ttl < c.step {
 		return errors.New("ttl must be more than cache step")
 	}
@@ -35,7 +35,7 @@ func (c *inMemoryCache[K, V]) Add(key K, val V, ttl time.Duration) error {
 	return nil
 }
 
-func (c *inMemoryCache[K, V]) Get(key K) (V, bool) {
+func (c *Cache[K, V]) Get(key K) (V, bool) {
 	c.mu.RLock()
 	v, ok := c.cache[key]
 	c.mu.RUnlock()
@@ -49,7 +49,7 @@ func (c *inMemoryCache[K, V]) Get(key K) (V, bool) {
 	return v.value, ok
 }
 
-func (c *inMemoryCache[K, V]) Delete(keys ...K) {
+func (c *Cache[K, V]) Delete(keys ...K) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, key := range keys {
@@ -59,7 +59,7 @@ func (c *inMemoryCache[K, V]) Delete(keys ...K) {
 }
 
 // not concurrent-safe
-func (c *inMemoryCache[K, V]) clean() {
+func (c *Cache[K, V]) clean() {
 	var index int
 	expiredTimes := make([]time.Time, 0, 4)
 	for i, t := range c.times {
@@ -89,7 +89,7 @@ func (c *inMemoryCache[K, V]) clean() {
 }
 
 // not concurrent-safe
-func (c *inMemoryCache[K, V]) deleteKeyFromQueue(key K) {
+func (c *Cache[K, V]) deleteKeyFromQueue(key K) {
 	v, ok := c.cache[key]
 	if !ok {
 		return
@@ -106,7 +106,7 @@ func (c *inMemoryCache[K, V]) deleteKeyFromQueue(key K) {
 }
 
 // not concurrent-safe
-func (c *inMemoryCache[K, V]) deleteTimeFromTimes(t time.Time) {
+func (c *Cache[K, V]) deleteTimeFromTimes(t time.Time) {
 	index, exists := findIndex(c.times, t, time.Time.Compare)
 	if !exists {
 		return
@@ -115,7 +115,7 @@ func (c *inMemoryCache[K, V]) deleteTimeFromTimes(t time.Time) {
 }
 
 // not concurrent-safe
-func (c *inMemoryCache[K, V]) addTime(t time.Time) {
+func (c *Cache[K, V]) addTime(t time.Time) {
 	index, exists := findIndex(c.times, t, time.Time.Compare)
 	if exists {
 		return
@@ -130,7 +130,7 @@ func (c *inMemoryCache[K, V]) addTime(t time.Time) {
 }
 
 // not concurrent-safe
-func (c *inMemoryCache[K, V]) addKey(key K, t time.Time) {
+func (c *Cache[K, V]) addKey(key K, t time.Time) {
 	index, exists := findIndex(c.queue[t], key, cmp.Compare)
 	if exists {
 		return

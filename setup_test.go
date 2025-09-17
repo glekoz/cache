@@ -12,7 +12,7 @@ import (
 
 type SetupSuite struct {
 	suite.Suite
-	cache *inMemoryCache[int, string]
+	cache *Cache[int, string]
 }
 
 func TestSetupSuite(t *testing.T) {
